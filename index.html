@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Reconocimiento de Patentes Chilenas</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <video id="video" width="320" height="240" autoplay></video>
+  <button onclick="capture()">Capturar</button>
+  <canvas id="canvas" width="320" height="240"></canvas>
+  <p id="result"></p>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const result = document.getElementById('result');
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(err => {
+        console.error("Error al acceder a la cámara:", err);
+      });
+
+    function capture() {
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      Tesseract.recognize(
+        canvas,
+        'eng', // Puedes ajustar el idioma o crear un modelo personalizado
+        {
+          logger: m => console.log(m)
+        }
+      )
+      .then(({ data: { text } }) => {
+        result.textContent = text;
+        // Aquí puedes agregar lógica para validar el formato de la patente
+      })
+      .catch(err => {
+        console.error(err);
+      });
+    }
+  </script>
+</body>
+</html>
