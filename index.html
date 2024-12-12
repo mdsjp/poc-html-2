@@ -1,62 +1,432 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <title>Reconocimiento de Patentes Chilenas</title>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner de Patentes</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 50vh;
+            background-color: #000;
+            overflow: hidden;
+            border-radius: 12px;
+            margin-bottom: 1rem;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #preview {
+            position: absolute;
+            bottom: 1rem;
+            right: 1rem;
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid #fff;
+            display: none;
+        }
+
+        .camera-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            padding: 1rem;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .btn-primary {
+            background-color: #007AFF;
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: #34C759;
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .results-container {
+            background-color: white;
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .export-options {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .export-btn {
+            padding: 0.5rem;
+            border: 1px solid #007AFF;
+            border-radius: 4px;
+            background: none;
+            color: #007AFF;
+            cursor: pointer;
+        }
+
+        .plates-list {
+            list-style: none;
+        }
+
+        .plate-item {
+            padding: 0.75rem;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .page-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #007AFF;
+            border-radius: 4px;
+            background: none;
+            color: #007AFF;
+            cursor: pointer;
+        }
+
+        .page-btn.active {
+            background-color: #007AFF;
+            color: white;
+        }
+
+        .loading {
+            position: relative;
+            pointer-events: none;
+        }
+
+        .loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-left: -10px;
+            margin-top: -10px;
+            border: 2px solid #ffffff;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            z-index: 1000;
+            display: none;
+        }
+
+        .toast.error {
+            background-color: #FF3B30;
+        }
+
+        .toast.success {
+            background-color: #34C759;
+        }
+    </style>
 </head>
 <body>
-  <video id="video" width="320" height="240" autoplay></video>
-  <button id="switchCamera">Cambiar Cámara</button>
-  <button onclick="capture()">Capturar</button>
-  <canvas id="canvas" width="320" height="240"></canvas>
-  <p id="result"></p>
+    <div class="container">
+        <div class="camera-container">
+            <video id="video" autoplay playsinline></video>
+            <img id="preview" />
+            <div class="camera-message">Esperando permisos de cámara...</div>
+        </div>
+        
+        <button id="captureBtn" class="btn btn-primary">Capturar</button>
+        <button id="processBtn" class="btn btn-secondary" disabled>Procesar</button>
 
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const result = document.getElementById('result');
-    const switchCameraBtn = document.getElementById('switchCamera');
+        <div class="results-container">
+            <div class="results-header">
+                <h2>Últimas patentes</h2>
+                <div class="export-options">
+                    <button class="export-btn" data-format="csv">CSV</button>
+                    <button class="export-btn" data-format="excel">Excel</button>
+                    <button class="export-btn" data-format="json">JSON</button>
+                    <button class="export-btn" data-format="txt">Texto</button>
+                </div>
+            </div>
+            <ul class="plates-list"></ul>
+            <div class="pagination"></div>
+        </div>
+    </div>
 
-    let facingMode = 'user'; // Por defecto, cámara frontal
+    <div id="toast" class="toast"></div>
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode } })
-      .then(stream => {
-        video.srcObject = stream;
-      })
-      .catch(err => {
-        console.error("Error al acceder a la cámara:", err);
-      });
+    <script>
+        class LicensePlateScanner {
+            constructor() {
+                this.video = document.getElementById('video');
+                this.preview = document.getElementById('preview');
+                this.captureBtn = document.getElementById('captureBtn');
+                this.processBtn = document.getElementById('processBtn');
+                this.platesList = document.querySelector('.plates-list');
+                this.cameraMessage = document.querySelector('.camera-message');
+                this.toast = document.getElementById('toast');
+                
+                this.currentImage = null;
+                this.plates = [];
+                this.currentPage = 1;
+                this.itemsPerPage = 10;
+                
+                this.initCamera();
+                this.initEventListeners();
+            }
 
-    switchCameraBtn.addEventListener('click', () => {
-      facingMode = facingMode === 'user' ? 'environment' : 'user';
-      navigator.mediaDevices.getUserMedia({ video: { facingMode } })
-        .then(stream => {
-          video.srcObject = stream;
-        })
-        .catch(err => {
-          console.error("Error al cambiar de cámara:", err);
-        });
-    });
+            async initCamera() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { 
+                            facingMode: 'environment',
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }
+                        } 
+                    });
+                    this.video.srcObject = stream;
+                    this.cameraMessage.style.display = 'none';
+                    this.captureBtn.disabled = false;
+                } catch (error) {
+                    this.showToast('Error al acceder a la cámara: ' + error.message, 'error');
+                    this.cameraMessage.textContent = 'Error al acceder a la cámara';
+                }
+            }
 
-    function capture() {
-      const context = canvas.getContext('2d');
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            initEventListeners() {
+                this.captureBtn.addEventListener('click', () => this.captureImage());
+                this.processBtn.addEventListener('click', () => this.processImage());
+                
+                document.querySelectorAll('.export-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        this.exportData(e.target.dataset.format);
+                    });
+                });
+            }
 
-      Tesseract.recognize(
-        canvas,
-        'eng', // Ajusta el idioma según sea necesario
-        {
-          logger: m => console.log(m)
+            captureImage() {
+                const canvas = document.createElement('canvas');
+                canvas.width = this.video.videoWidth;
+                canvas.height = this.video.videoHeight;
+                canvas.getContext('2d').drawImage(this.video, 0, 0);
+                
+                this.currentImage = canvas.toDataURL('image/jpeg');
+                this.preview.src = this.currentImage;
+                this.preview.style.display = 'block';
+                this.processBtn.disabled = false;
+            }
+
+            async processImage() {
+                if (!this.currentImage) {
+                    this.showToast('Por favor, capture una imagen primero', 'error');
+                    return;
+                }
+
+                this.processBtn.classList.add('loading');
+                this.processBtn.disabled = true;
+
+                try {
+                    // TODO: Reemplazar URL con tu endpoint
+                    const response = await fetch('TU_URL_API/process-plate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            image: this.currentImage
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Error en la respuesta del servidor');
+                    }
+
+                    const data = await response.json();
+                    // TODO: Ajustar según el formato de respuesta de tu API
+                    // Formato esperado: { plates: ['ABC123', 'XYZ789'] }
+                    
+                    this.addPlates(data.plates);
+                    this.showToast(`${data.plates.length} patente(s) detectada(s)`, 'success');
+                } catch (error) {
+                    this.showToast('Error al procesar la imagen: ' + error.message, 'error');
+                } finally {
+                    this.processBtn.classList.remove('loading');
+                    this.processBtn.disabled = false;
+                }
+            }
+
+            addPlates(newPlates) {
+                this.plates.unshift(...newPlates);
+                this.renderPlates();
+            }
+
+            renderPlates() {
+                const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+                const endIndex = startIndex + this.itemsPerPage;
+                const pageItems = this.plates.slice(startIndex, endIndex);
+
+                this.platesList.innerHTML = pageItems
+                    .map(plate => `<li class="plate-item">${plate}</li>`)
+                    .join('');
+
+                this.renderPagination();
+            }
+
+            renderPagination() {
+                const totalPages = Math.ceil(this.plates.length / this.itemsPerPage);
+                const pagination = document.querySelector('.pagination');
+                
+                let html = '';
+                for (let i = 1; i <= totalPages; i++) {
+                    html += `<button class="page-btn ${i === this.currentPage ? 'active' : ''}"
+                            onclick="scanner.goToPage(${i})">${i}</button>`;
+                }
+                pagination.innerHTML = html;
+            }
+
+            goToPage(page) {
+                this.currentPage = page;
+                this.renderPlates();
+            }
+
+            exportData(format) {
+                if (this.plates.length === 0) {
+                    this.showToast('No hay datos para exportar', 'error');
+                    return;
+                }
+
+                switch (format) {
+                    case 'csv':
+                        this.exportCSV();
+                        break;
+                    case 'excel':
+                        this.exportExcel();
+                        break;
+                    case 'json':
+                        this.exportJSON();
+                        break;
+                    case 'txt':
+                        this.exportTXT();
+                        break;
+                }
+            }
+
+            exportCSV() {
+                const csv = this.plates.join('\n');
+                this.downloadFile(csv, 'patentes.csv', 'text/csv');
+            }
+
+            exportExcel() {
+                const ws = XLSX.utils.aoa_to_sheet(this.plates.map(plate => [plate]));
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Patentes");
+                XLSX.writeFile(wb, "patentes.xlsx");
+            }
+
+            exportJSON() {
+                const json = JSON.stringify(this.plates, null, 2);
+                this.downloadFile(json, 'patentes.json', 'application/json');
+            }
+
+            exportTXT() {
+                const txt = this.plates.join('\n');
+                this.downloadFile(txt, 'patentes.txt', 'text/plain');
+            }
+
+            downloadFile(content, filename, type) {
+                const blob = new Blob([content], { type });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            }
+
+            showToast(message, type = 'success') {
+                this.toast.textContent = message;
+                this.toast.className = `toast ${type}`;
+                this.toast.style.display = 'block';
+                
+                setTimeout(() => {
+                    this.toast.style.display = 'none';
+                }, 3000);
+            }
         }
-      )
-      .then(({ data: { text } }) => {
-        result.textContent = text;
-        // Aquí puedes agregar lógica para validar el formato de la patente
-      })
-      .catch(err => {
-        console.error(err);
-      });
-    }
-  </script>
+
+        // Inicializar la aplicación
+        const scanner = new LicensePlateScanner();
+    </script>
 </body>
 </html>
