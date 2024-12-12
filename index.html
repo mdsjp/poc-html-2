@@ -51,6 +51,32 @@
             display: none;
         }
 
+        .camera-switch {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .camera-switch:hover {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+
+        .camera-switch svg {
+            width: 24px;
+            height: 24px;
+        }
+
         .camera-message {
             position: absolute;
             top: 50%;
@@ -201,6 +227,14 @@
         <div class="camera-container">
             <video id="video" autoplay playsinline></video>
             <img id="preview" />
+            <button id="switchCamera" class="camera-switch">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 4h-4L14 2h-4L8 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M16.83 7.17l1.41 1.41"/>
+                    <path d="M7.17 7.17l-1.41 1.41"/>
+                </svg>
+            </button>
             <div class="camera-message">Esperando permisos de cámara...</div>
         </div>
         
@@ -231,9 +265,11 @@
                 this.preview = document.getElementById('preview');
                 this.captureBtn = document.getElementById('captureBtn');
                 this.processBtn = document.getElementById('processBtn');
+                this.switchCameraBtn = document.getElementById('switchCamera');
                 this.platesList = document.querySelector('.plates-list');
                 this.cameraMessage = document.querySelector('.camera-message');
                 this.toast = document.getElementById('toast');
+                this.currentFacingMode = 'environment';
                 
                 this.currentImage = null;
                 this.plates = [];
